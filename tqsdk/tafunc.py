@@ -828,6 +828,19 @@ def barlast(cond):
     return pd.Series(r)
 
 
+def _get_t_series(series: pd.Series, dur: int, quote):
+    dur = dur[0] if isinstance(dur, pd.Series) else dur
+    if dur < 86400:
+        dt_series = series / 1e9 + dur
+    else:
+        end = [int(i) for i in quote["trading_time"].get("day")[-1][-1].split(":")]  # 交易日结束的时间点
+        dt_series = series / 1e9 + dur - 86400 + end[0] * 3600 + end[1] * 60 + end[2]
+        now_timestamp = datetime.datetime.now().timestamp()
+        dt_series = pd.Series(np.where(dt_series >= quote.expire_datetime, now_timestamp, dt_series))
+    t = pd.Series(pd.to_timedelta(quote.expire_datetime - dt_series, unit='s'))
+    return (t.dt.days * 86400 + t.dt.seconds) / (360 * 86400)
+
+
 def _get_volatility(series: pd.Series, dur: Union[pd.Series, int] = 86400, trading_time: list = None,
                     default: float = 0.3) -> float:
     series_u = np.log(series.shift(1)[1:] / series[1:])
